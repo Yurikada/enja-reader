@@ -50,12 +50,28 @@ python eval/compare.py --configs gemma2:base gemma2:fewshot2 qwen2.5:7b:fewshot2
 
 few-shot例(特に「X, not Y」構文)の追加で両モデルとも否定構文の誤訳が解消。見出しは体言止めヒントをプロンプトに付与する。
 
+## Chrome拡張 (`extension/`)
+
+任意の英語ページを、その場で文単位の英日混成表示にする。
+
+**導入**: `chrome://extensions` → デベロッパーモードON → 「パッケージ化されていない拡張機能を読み込む」で `extension/` を選択。ツールバーのアイコンをクリックで有効化、再クリックで解除(元のページに完全復元)。
+
+**翻訳バックエンド** (自動選択):
+
+1. **Chrome内蔵 Translator API** (既定、Chrome 138+) — オンデバイス翻訳。セットアップ不要・ほぼ瞬時。初回のみ言語パックが自動DLされる
+2. **Ollama** (品質モード) — だ・である統一のLLM翻訳。`OLLAMA_ORIGINS=chrome-extension://*` を環境変数に設定して `ollama serve` を起動しておく
+
+`chrome.storage.sync` の `backend` (`auto`/`chrome`/`ollama`)、`select` (`hash`/`difficulty`)、`ratio`、`model` で挙動を変更できる(設定UIは今後)。
+
+**ロジック検証**: `extension/test/harness.html` をHTTPサーバ経由で開くと、モックTranslatorでcontent scriptの全動作(抽出・分割・混成・トグル・復元)を確認できる。
+
 ## ロードマップ
 
 1. ~~v0.1: ローカルMarkdown → 自己完結HTMLビューア~~
 2. ~~v0.2: HTML入力、難易度ベースの文選択、ビューアJS/CSSの分離~~
-3. **v0.3 (今ここ)**: 訳質向上 — few-shotプロンプト・見出し体言止め・モデル比較ハーネス。残: 用語集、PDF入力
-4. v1.0: Chrome拡張 — content scriptでページ本文を文分割し、localhostのOllamaへ翻訳リクエスト(`OLLAMA_ORIGINS`でCORS許可)。`enja_reader/assets/viewer.js` のロジックをそのまま移植
+3. ~~v0.3: 訳質向上 — few-shotプロンプト・見出し体言止め・モデル比較ハーネス~~
+4. **v1.0 (今ここ)**: Chrome拡張 — Chrome内蔵Translator API既定+Ollama品質モードのハイブリッド
+5. 今後: 設定ポップアップUI、訳キャッシュ永続化、用語集、PDF入力
 
 ## 依存
 

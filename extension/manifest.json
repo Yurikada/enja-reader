@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "enja-reader",
+  "version": "1.0.0",
+  "description": "英語ページを文単位で英日混成表示。ノブで日本語比率を調整し、一文単位で英語を英語のまま読む練習をする。",
+  "action": {
+    "default_title": "enja-reader: このページを混成表示 (再クリックで解除)"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:11434/*", "http://127.0.0.1:11434/*"]
+}

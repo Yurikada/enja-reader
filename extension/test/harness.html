@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>enja-reader content script harness</title>
+<link rel="stylesheet" href="../content.css">
+<style>
+  body { max-width: 44rem; margin: 2rem auto; font-family: Georgia, serif; line-height: 1.8; }
+  nav { color: #999; }
+</style>
+<script>
+  // ---- mocks for the extension environment ----
+  window.chrome = {
+    storage: { sync: { get: async () => ({}) } },
+    runtime: { sendMessage: async () => ({ ok: false, error: "no ollama in harness" }) },
+  };
+  // mock Chrome built-in Translator API with latency to exercise the queue
+  self.Translator = {
+    availability: async () => "available",
+    create: async () => ({
+      translate: async (s) => {
+        await new Promise((r) => setTimeout(r, 60));
+        return "【訳】" + s;
+      },
+    }),
+  };
+</script>
+</head>
+<body>
+<nav>Home / Articles / Reading — this nav text should be skipped entirely.</nav>
+<h1>Why Reading in English Feels Hard</h1>
+<p>Reading a foreign language is not one skill but two skills stacked on top of
+each other. You must decode each sentence, and you must also hold the overall
+argument of the document in your head. When both tasks compete for attention,
+comprehension collapses.</p>
+<h2>The core hypothesis</h2>
+<p>If the surrounding context is presented in your native language, the cost of
+understanding the document as a whole drops sharply. You can then spend your
+full attention on a single English sentence at a time.</p>
+<ul>
+  <li>It splits a document into sentences and translates each one locally.</li>
+  <li>A slider controls how many sentences are displayed in Japanese.</li>
+</ul>
+<blockquote><p>The goal is not translation. The goal is to lower the threshold
+between reading Japanese and reading English.</p></blockquote>
+<pre>code_block = "must never be touched"</pre>
+<p>短い日本語の段落は対象外になるはずである。これはラテン文字比率のフィルタで除外される。</p>
+<script src="../content.js"></script>
+</body>
+</html>
