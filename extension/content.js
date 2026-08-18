@@ -10,7 +10,8 @@
 
   // guard against double activation immediately — init below awaits.
   let active = true;
-  const restore = []; // [element, original child nodes (actual node objects)]
+  // per block: [element, original child nodes (live objects), nodes we created]
+  const restore = [];
   const spans = [];
   const queue = [];
   let host = null;
@@ -19,9 +20,10 @@
     if (!active) return;
     active = false;
     queue.length = 0;
-    for (const [el, nodes] of restore) {
-      el.textContent = "";
-      el.append(...nodes);
+    for (const [el, originals, created] of restore) {
+      // remove only what we created; nodes the page added while active stay
+      for (const n of created) n.remove();
+      el.prepend(...originals);
     }
     host?.remove();
     document.removeEventListener("click", onClick, true);
@@ -176,10 +178,15 @@
   for (const b of blocks) {
     const sentences = splitSentences(b.text);
     if (!sentences.length) continue;
-    restore.push([b.el, [...b.el.childNodes]]);
-    b.el.textContent = "";
+    const originals = [...b.el.childNodes];
+    const created = [];
+    for (const n of originals) n.remove();
     sentences.forEach((sent, i) => {
-      if (i > 0) b.el.appendChild(document.createTextNode(" "));
+      if (i > 0) {
+        const sep = document.createTextNode(" ");
+        created.push(sep);
+        b.el.appendChild(sep);
+      }
       const span = document.createElement("span");
       span.className = "enja-s";
       span.textContent = sent;
@@ -187,8 +194,10 @@
         span, en: sent, ja: null, pending: false, failed: false,
         before: sentences[i - 1] || "", after: sentences[i + 1] || "",
       });
+      created.push(span);
       b.el.appendChild(span);
     });
+    restore.push([b.el, originals, created]);
   }
 
   if (!spans.length) {
@@ -296,7 +305,8 @@
     <div class="bar">
       <div class="row">
         <span>日本語比率</span>
-        <input type="range" min="0" max="100" value="${Number(settings.ratio) || 30}">
+        <input type="range" min="0" max="100"
+               value="${Number.isFinite(+settings.ratio) ? Math.min(Math.max(+settings.ratio, 0), 100) : 30}">
         <span class="pct"></span>
       </div>
       <div class="meta">

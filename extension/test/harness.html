@@ -89,21 +89,22 @@ between reading Japanese and reading English.</p></blockquote>
   ok("click toggles lang", !first.classList.contains("enja-ja"));
   ok("manual mark set", first.classList.contains("enja-manual"));
 
-  // 4. deactivate: DOM restored with the SAME node objects, queue stops
-  slider.value = 0;
-  slider.dispatchEvent(new Event("input"));
-  slider.value = 100;
-  slider.dispatchEvent(new Event("input")); // refill queue
-  const callsAtClose = window.__mockCalls;
+  // 4. deactivate: DOM restored with the SAME node objects; nodes the page
+  //    added while active must survive
+  const added = document.createElement("span");
+  added.id = "page-added";
+  added.textContent = " [added-while-active]";
+  document.querySelector("h1").appendChild(added);
   bar().shadowRoot.querySelector(".close").click();
-  await sleep(400);
+  await sleep(300);
   ok("bar removed", !bar());
   ok("spans removed", document.querySelectorAll(".enja-s").length === 0);
   ok("same node object restored", document.getElementById("keep") === emBefore);
-  ok("queue stopped after close", window.__mockCalls - callsAtClose <= 3);
+  ok("page-added node survives", document.getElementById("page-added") === added);
+  added.remove();
 
-  // 5. re-injection acts as toggle: script run #2 re-activates,
-  //    run #3 deactivates again
+  // 5. re-injection acts as toggle; fresh records let us test a STRICT
+  //    queue stop (no calls at all after close)
   const inject = () => new Promise((r) => {
     const s = document.createElement("script");
     s.src = "../content.js";
@@ -113,9 +114,23 @@ between reading Japanese and reading English.</p></blockquote>
   await inject();
   await sleep(600);
   ok("re-activation works", !!bar() && document.querySelectorAll(".enja-s").length > 0);
+  const slider2 = bar().shadowRoot.querySelector("input");
+  slider2.value = 100;
+  slider2.dispatchEvent(new Event("input")); // fill queue with untranslated records
+  await sleep(30); // let ~CONCURRENCY jobs start
+  bar().shadowRoot.querySelector(".close").click();
+  const callsAtClose = window.__mockCalls;
+  await sleep(1000);
+  ok("strictly no calls after close", window.__mockCalls === callsAtClose);
+  ok("close deactivated", !bar() && document.querySelectorAll(".enja-s").length === 0);
+
+  // 6. third injection re-activates again (toggle still works)
   await inject();
-  await sleep(300);
-  ok("second injection deactivates", !bar() && document.querySelectorAll(".enja-s").length === 0);
+  await sleep(600);
+  ok("third injection re-activates", !!bar());
+  window.__enjaReader.deactivate();
+  await sleep(200);
+  ok("programmatic deactivate", !bar());
 
   // report
   const failed = results.filter((r) => !r.pass);

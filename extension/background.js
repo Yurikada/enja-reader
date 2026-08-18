@@ -39,10 +39,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // keep the channel open for the async response
 });
 
-// NOTE: MV3 service workers cap a single fetch response wait; a cold Ollama
-// model can exceed it. We abort at 90s and surface the error to the caller
-// rather than losing the message channel silently.
-const OLLAMA_TIMEOUT_MS = 90_000;
+// NOTE: MV3 service workers cap a single fetch response wait (~30s); a cold
+// Ollama model can exceed it. Abort below that cap so the error reliably
+// reaches the caller instead of the message channel being lost. A timed-out
+// sentence stays English; re-activating retries it once the model is warm.
+const OLLAMA_TIMEOUT_MS = 25_000;
 
 async function ollamaTranslate({ sentence, before, after, model }) {
   const parts = [];
