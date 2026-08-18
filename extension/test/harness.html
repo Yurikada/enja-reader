@@ -102,13 +102,18 @@ between reading Japanese and reading English.</p></blockquote>
   await sleep(900);
   ok("flip: EN translation shown", [...document.querySelectorAll(".enja-s")]
       .some((s) => s.textContent.startsWith("[EN] ")));
-  // flip back WHILE ja->en translations are in flight (fresh queue first):
-  // old-generation completions must still pump the new queue
-  sliderJa.value = 0;
-  sliderJa.dispatchEvent(new Event("input"));
-  sliderJa.value = 100;
-  sliderJa.dispatchEvent(new Event("input"));
-  await sleep(20); // jobs started, queue non-empty
+  // flip back WHILE translations are in flight. Records are cached per
+  // build, so first create a FRESH ja->en generation (flip out and back),
+  // start its queue, then flip mid-flight: old-generation completions must
+  // still pump the new queue.
+  bar().shadowRoot.querySelector(".dir").click(); // -> en-ja
+  await sleep(700);
+  bar().shadowRoot.querySelector(".dir").click(); // -> ja-en, fresh records
+  await sleep(700);
+  const sliderJa2 = bar().shadowRoot.querySelector("input");
+  sliderJa2.value = 100;
+  sliderJa2.dispatchEvent(new Event("input"));
+  await sleep(15); // jobs in flight, untranslated
   bar().shadowRoot.querySelector(".dir").click();
   await sleep(700);
   ok("flip back: knob label 日本語比率", knobLabel() === "日本語比率");
