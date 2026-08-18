@@ -8,10 +8,39 @@
     return;
   }
 
+  // guard against double activation immediately — init below awaits.
+  let active = true;
+  const restore = []; // [element, original child nodes (actual node objects)]
+  const spans = [];
+  const queue = [];
+  let host = null;
+
+  function deactivate() {
+    if (!active) return;
+    active = false;
+    queue.length = 0;
+    for (const [el, nodes] of restore) {
+      el.textContent = "";
+      el.append(...nodes);
+    }
+    host?.remove();
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("mouseover", onOver, true);
+    document.removeEventListener("mouseout", onOut, true);
+    try {
+      chrome.runtime.sendMessage({ type: "enja-remove-css" });
+    } catch {
+      /* extension context may be gone (e.g. harness) */
+    }
+    delete window.__enjaReader;
+  }
+  window.__enjaReader = { deactivate };
+
   const settings = Object.assign(
     { backend: "auto", select: "hash", ratio: 30, model: "gemma2" },
     await chrome.storage.sync.get(["backend", "select", "ratio", "model"]),
   );
+  if (!active) return;
 
   // ---------- translation backends ----------
 
@@ -50,15 +79,24 @@
   let backend = null;
   if (settings.backend !== "ollama") backend = await makeChromeBackend();
   if (!backend && settings.backend !== "chrome") backend = makeOllamaBackend();
+  if (!active) return;
   if (!backend) {
     alert("enja-reader: 翻訳バックエンドが利用できません。Chrome 138+ か、Ollama の起動が必要です。");
+    deactivate();
     return;
   }
 
-  // ---------- block collection ----------
+  // ---------- language check (built-in detector when available) ----------
 
-  const SKIP_CLOSEST = "nav, footer, aside, pre, code, [contenteditable], .enja-s";
-  const BLOCK_CHILD = "p, div, ul, ol, table, pre, blockquote, h1, h2, h3, h4, h5, h6";
+  let detector = null;
+  if ("LanguageDetector" in self) {
+    try {
+      detector = await LanguageDetector.create();
+    } catch {
+      detector = null;
+    }
+  }
+  if (!active) return;
 
   function latinRatio(text) {
     const letters = text.match(/\p{L}/gu) || [];
@@ -67,7 +105,24 @@
     return latin.length / letters.length;
   }
 
-  function collectBlocks() {
+  async function isEnglish(text) {
+    if (detector) {
+      try {
+        const [top] = await detector.detect(text);
+        return !!top && top.detectedLanguage === "en" && top.confidence > 0.5;
+      } catch {
+        /* fall through to heuristic */
+      }
+    }
+    return latinRatio(text) >= 0.5;
+  }
+
+  // ---------- block collection ----------
+
+  const SKIP_CLOSEST = "nav, footer, aside, pre, code, [contenteditable], .enja-s";
+  const BLOCK_CHILD = "p, div, ul, ol, table, pre, blockquote, h1, h2, h3, h4, h5, h6";
+
+  async function collectBlocks() {
     const blocks = [];
     for (const el of document.querySelectorAll(
       "p, h1, h2, h3, h4, h5, h6, li, blockquote, dd, figcaption",
@@ -78,8 +133,8 @@
       const text = el.innerText.replace(/\s+/g, " ").trim();
       const isHeading = /^H[1-6]$/.test(el.tagName);
       if (text.length < (isHeading ? 4 : 25)) continue;
-      if (latinRatio(text) < 0.5) continue;
-      blocks.push({ el, text, isHeading });
+      if (!(await isEnglish(text))) continue;
+      blocks.push({ el, text });
     }
     return blocks;
   }
@@ -112,24 +167,24 @@
   }
 
   // ---------- wrap page sentences into spans ----------
+  // Original child nodes are kept as live node objects (not serialized HTML),
+  // so listeners and element state survive a deactivate.
 
-  const blocks = collectBlocks();
-  const spans = [];
-  const restore = []; // [el, originalHTML]
+  const blocks = await collectBlocks();
+  if (!active) return;
 
   for (const b of blocks) {
     const sentences = splitSentences(b.text);
     if (!sentences.length) continue;
-    restore.push([b.el, b.el.innerHTML]);
+    restore.push([b.el, [...b.el.childNodes]]);
     b.el.textContent = "";
     sentences.forEach((sent, i) => {
       if (i > 0) b.el.appendChild(document.createTextNode(" "));
       const span = document.createElement("span");
       span.className = "enja-s";
       span.textContent = sent;
-      span.dataset.en = sent;
       spans.push({
-        span, en: sent, ja: null, pending: false,
+        span, en: sent, ja: null, pending: false, failed: false,
         before: sentences[i - 1] || "", after: sentences[i + 1] || "",
       });
       b.el.appendChild(span);
@@ -138,6 +193,7 @@
 
   if (!spans.length) {
     alert("enja-reader: このページに処理対象の英文が見つかりません。");
+    deactivate();
     return;
   }
 
@@ -153,12 +209,21 @@
 
   // ---------- translation queue (lazy, concurrency-limited) ----------
 
-  const queue = [];
   let running = 0;
   const CONCURRENCY = 3;
 
   function enqueue(rec, priority = false) {
-    if (rec.ja !== null || rec.pending || rec.failed) return;
+    if (!active || rec.ja !== null || rec.failed) return;
+    if (rec.pending) {
+      if (priority) {
+        const i = queue.indexOf(rec);
+        if (i > 0) {
+          queue.splice(i, 1);
+          queue.unshift(rec);
+        }
+      }
+      return;
+    }
     rec.pending = true;
     rec.span.classList.add("enja-pending");
     priority ? queue.unshift(rec) : queue.push(rec);
@@ -166,7 +231,7 @@
   }
 
   function pump() {
-    while (running < CONCURRENCY && queue.length) {
+    while (active && running < CONCURRENCY && queue.length) {
       const rec = queue.shift();
       running++;
       backend.translate(rec.en, rec.before, rec.after)
@@ -176,6 +241,7 @@
           rec.pending = false;
           rec.span.classList.remove("enja-pending");
           running--;
+          if (!active) return;
           render(rec);
           pump();
         });
@@ -206,7 +272,7 @@
 
   // ---------- control bar (shadow DOM, isolated from page CSS) ----------
 
-  const host = document.createElement("div");
+  host = document.createElement("div");
   host.id = "enja-bar-host";
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
@@ -230,7 +296,7 @@
     <div class="bar">
       <div class="row">
         <span>日本語比率</span>
-        <input type="range" min="0" max="100" value="${settings.ratio}">
+        <input type="range" min="0" max="100" value="${Number(settings.ratio) || 30}">
         <span class="pct"></span>
       </div>
       <div class="meta">
@@ -304,17 +370,5 @@
   document.addEventListener("mouseover", onOver, true);
   document.addEventListener("mouseout", onOut, true);
 
-  // ---------- deactivate ----------
-
-  function deactivate() {
-    for (const [el, htmlText] of restore) el.innerHTML = htmlText;
-    host.remove();
-    document.removeEventListener("click", onClick, true);
-    document.removeEventListener("mouseover", onOver, true);
-    document.removeEventListener("mouseout", onOut, true);
-    delete window.__enjaReader;
-  }
-
-  window.__enjaReader = { deactivate };
   applyAll();
 })();

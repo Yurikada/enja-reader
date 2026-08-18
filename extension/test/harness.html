@@ -2,24 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>enja-reader content script harness</title>
+<title>enja-reader harness</title>
 <link rel="stylesheet" href="../content.css">
 <style>
   body { max-width: 44rem; margin: 2rem auto; font-family: Georgia, serif; line-height: 1.8; }
   nav { color: #999; }
+  #results { font-family: monospace; font-size: 13px; background: #f6f8fa;
+             padding: 1rem; border-radius: 8px; }
+  #results .fail { color: #c00; font-weight: bold; }
 </style>
 <script>
   // ---- mocks for the extension environment ----
+  window.__mockCalls = 0;
   window.chrome = {
     storage: { sync: { get: async () => ({}) } },
     runtime: { sendMessage: async () => ({ ok: false, error: "no ollama in harness" }) },
   };
-  // mock Chrome built-in Translator API with latency to exercise the queue
   self.Translator = {
     availability: async () => "available",
     create: async () => ({
       translate: async (s) => {
-        await new Promise((r) => setTimeout(r, 60));
+        window.__mockCalls++;
+        await new Promise((r) => setTimeout(r, 40));
         return "【訳】" + s;
       },
     }),
@@ -27,9 +31,10 @@
 </script>
 </head>
 <body>
+<div id="results">running…</div>
 <nav>Home / Articles / Reading — this nav text should be skipped entirely.</nav>
 <h1>Why Reading in English Feels Hard</h1>
-<p>Reading a foreign language is not one skill but two skills stacked on top of
+<p>Reading a foreign language is not one skill but <em id="keep">two skills</em> stacked on top of
 each other. You must decode each sentence, and you must also hold the overall
 argument of the document in your head. When both tasks compete for attention,
 comprehension collapses.</p>
@@ -45,6 +50,80 @@ full attention on a single English sentence at a time.</p>
 between reading Japanese and reading English.</p></blockquote>
 <pre>code_block = "must never be touched"</pre>
 <p>短い日本語の段落は対象外になるはずである。これはラテン文字比率のフィルタで除外される。</p>
+
 <script src="../content.js"></script>
+<script>
+(async () => {
+  const results = [];
+  const ok = (name, cond) => results.push({ name, pass: !!cond });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bar = () => document.getElementById("enja-bar-host");
+  const emBefore = document.getElementById("keep");
+
+  await sleep(600); // let activation finish
+
+  // 1. activation
+  ok("bar shown", !!bar());
+  const total = document.querySelectorAll(".enja-s").length;
+  ok("sentences wrapped", total >= 8);
+  ok("nav skipped", !document.querySelector("nav .enja-s"));
+  ok("pre untouched", document.querySelector("pre").textContent.includes("must never"));
+  ok("ja paragraph skipped", ![...document.querySelectorAll(".enja-s")]
+      .some((s) => s.textContent.includes("ラテン文字")));
+
+  // 2. slider to 100% -> everything translates
+  const slider = bar().shadowRoot.querySelector("input");
+  slider.value = 100;
+  slider.dispatchEvent(new Event("input"));
+  for (let i = 0; i < 20; i++) {
+    if (document.querySelectorAll(".enja-s.enja-ja").length === total) break;
+    await sleep(300);
+  }
+  const jaCount = document.querySelectorAll(".enja-s.enja-ja").length;
+  ok("all translated at 100%", jaCount === total);
+
+  // 3. click toggle + manual mark
+  const first = document.querySelector(".enja-s");
+  first.click();
+  await sleep(200);
+  ok("click toggles lang", !first.classList.contains("enja-ja"));
+  ok("manual mark set", first.classList.contains("enja-manual"));
+
+  // 4. deactivate: DOM restored with the SAME node objects, queue stops
+  slider.value = 0;
+  slider.dispatchEvent(new Event("input"));
+  slider.value = 100;
+  slider.dispatchEvent(new Event("input")); // refill queue
+  const callsAtClose = window.__mockCalls;
+  bar().shadowRoot.querySelector(".close").click();
+  await sleep(400);
+  ok("bar removed", !bar());
+  ok("spans removed", document.querySelectorAll(".enja-s").length === 0);
+  ok("same node object restored", document.getElementById("keep") === emBefore);
+  ok("queue stopped after close", window.__mockCalls - callsAtClose <= 3);
+
+  // 5. re-injection acts as toggle: script run #2 re-activates,
+  //    run #3 deactivates again
+  const inject = () => new Promise((r) => {
+    const s = document.createElement("script");
+    s.src = "../content.js";
+    s.onload = r;
+    document.body.appendChild(s);
+  });
+  await inject();
+  await sleep(600);
+  ok("re-activation works", !!bar() && document.querySelectorAll(".enja-s").length > 0);
+  await inject();
+  await sleep(300);
+  ok("second injection deactivates", !bar() && document.querySelectorAll(".enja-s").length === 0);
+
+  // report
+  const failed = results.filter((r) => !r.pass);
+  document.getElementById("results").innerHTML = results
+    .map((r) => `<div class="${r.pass ? "pass" : "fail"}">${r.pass ? "ok" : "FAIL"} ${r.name}</div>`)
+    .join("") + `<div><b>${failed.length ? "FAIL" : "PASS"} (${results.length - failed.length}/${results.length})</b></div>`;
+  document.title = failed.length ? "HARNESS-FAIL" : "HARNESS-PASS";
+})();
+</script>
 </body>
 </html>

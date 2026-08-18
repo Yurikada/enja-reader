@@ -24,7 +24,13 @@ chrome.action.onClicked.addListener(async (tab) => {
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
 });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === "enja-remove-css" && sender.tab?.id) {
+    chrome.scripting.removeCSS({
+      target: { tabId: sender.tab.id }, files: ["content.css"],
+    }).catch(() => {});
+    return false;
+  }
   if (msg?.type !== "ollama-translate") return false;
   ollamaTranslate(msg).then(
     (ja) => sendResponse({ ok: true, ja }),
@@ -33,6 +39,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true; // keep the channel open for the async response
 });
 
+// NOTE: MV3 service workers cap a single fetch response wait; a cold Ollama
+// model can exceed it. We abort at 90s and surface the error to the caller
+// rather than losing the message channel silently.
+const OLLAMA_TIMEOUT_MS = 90_000;
+
 async function ollamaTranslate({ sentence, before, after, model }) {
   const parts = [];
   if (before) parts.push(`Context (before): ${before}`);
@@ -40,6 +51,7 @@ async function ollamaTranslate({ sentence, before, after, model }) {
   parts.push(`Target sentence: ${sentence}`);
   const resp = await fetch(OLLAMA_URL, {
     method: "POST",
+    signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model || "gemma2",
