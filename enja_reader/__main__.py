@@ -21,8 +21,20 @@ from .translate import TranslationCache, check_server, translate_sentence
 TRANSLATABLE = {"heading", "paragraph", "list_item", "quote"}
 
 
+def resolve_output(src: Path, output: str | None) -> Path:
+    out = Path(output) if output else src.with_name(src.stem + ".enja.html")
+    if out.resolve() == src.resolve():
+        raise ValueError("output path would overwrite the input; pass a different -o")
+    return out
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     src = Path(args.input)
+    try:
+        out = resolve_output(src, args.output)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     fmt = "html" if src.suffix.lower() in {".html", ".htm"} else "markdown"
     text = src.read_text(encoding="utf-8", errors="replace")
     blocks = parse_document(text, fmt=fmt)
@@ -61,10 +73,10 @@ def cmd_build(args: argparse.Namespace) -> int:
                 rate = done / max(time.time() - t0, 1e-9)
                 print(f"  translated {done}/{total} ({rate:.1f} sent/s)", flush=True)
         out_blocks.append(
-            {"kind": b.kind, "level": b.level, "ordered": b.ordered, "sentences": pairs}
+            {"kind": b.kind, "level": b.level, "ordered": b.ordered,
+             "n": b.number, "sentences": pairs}
         )
 
-    out = Path(args.output) if args.output else src.with_suffix(".html")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         render_html(out_blocks, title=src.stem, initial_ratio=args.ratio),

@@ -12,6 +12,7 @@ Blended reading makes this trade-off adjustable. A learner starts with most sent
 
 1. It reads a Markdown or HTML document from disk.
 2. It asks a local model for a translation of every sentence.
+  - Nothing ever leaves your machine.
 3. It writes a single HTML file that needs no server.
 
 - It splits a document into sentences and translates each one locally.

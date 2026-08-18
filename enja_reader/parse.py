@@ -20,6 +20,7 @@ class Block:
     text: str
     level: int = 0  # heading level or list indent depth
     ordered: bool = False  # list_item: numbered vs bullet
+    number: int = 0  # list_item: explicit number of an ordered item (0 = unknown)
     sentences: list[str] = field(default_factory=list)
 
 
@@ -81,12 +82,14 @@ def parse_markdown(text: str) -> list[Block]:
                     and not _HEADING_RE.match(lines[i]) and not _FENCE_RE.match(lines[i]):
                 item.append(lines[i].strip())
                 i += 1
+            ordered = marker[0].isdigit()
             blocks.append(
                 Block(
                     "list_item",
                     " ".join(item),
                     level=len(indent) // 2,
-                    ordered=marker[0].isdigit(),
+                    ordered=ordered,
+                    number=int(marker[:-1]) if ordered else 0,
                 )
             )
             continue
@@ -113,8 +116,13 @@ def parse_markdown(text: str) -> list[Block]:
     return blocks
 
 
-_SKIP_TAGS = {"script", "style", "nav", "footer", "header", "aside", "noscript",
-              "svg", "form", "button", "select", "template", "iframe"}
+_SKIP_TAGS = {"head", "title", "script", "style", "nav", "footer", "header",
+              "aside", "noscript", "svg", "form", "button", "select",
+              "template", "iframe"}
+# tags that end any text run even though we don't extract them directly
+_BOUNDARY_TAGS = {"div", "section", "article", "main", "body", "table", "tr",
+                  "td", "th", "figure", "figcaption", "dl", "dt", "dd",
+                  "details", "summary", "hr"}
 _WS_RE = re.compile(r"\s+")
 
 
@@ -171,6 +179,8 @@ class _HTMLBlockExtractor(HTMLParser):
         elif tag == "blockquote":
             self._flush()
             self._quote_depth += 1
+        elif tag in _BOUNDARY_TAGS:
+            self._flush()
         elif tag == "br" and self._current is not None:
             self._buf.append("\n" if self._pre_depth else " ")
 
@@ -192,14 +202,17 @@ class _HTMLBlockExtractor(HTMLParser):
         elif tag == "blockquote":
             self._flush()
             self._quote_depth = max(self._quote_depth - 1, 0)
+        elif tag in _BOUNDARY_TAGS:
+            self._flush()
 
     def handle_data(self, data: str) -> None:
         if self._skip_depth:
             return
         if self._current is None:
-            # bare text directly inside body/div/article
+            # bare text directly inside body/div/article/blockquote
             if data.strip():
-                self._current = Block("paragraph", "")
+                kind = "quote" if self._quote_depth else "paragraph"
+                self._current = Block(kind, "")
                 self._buf = [data]
             return
         self._buf.append(data)

@@ -20,21 +20,33 @@ function makeSentence(s) {
   return el;
 }
 
-let openList = null; // {el, ordered, level}
+let listStack = []; // open lists, shallowest first: {el, ordered, level}
 
 function listContainerFor(b) {
   const ordered = !!b.ordered;
-  if (!openList || openList.ordered !== ordered || openList.level !== (b.level || 0)) {
-    const el = document.createElement(ordered ? "ol" : "ul");
-    if (b.level) el.style.marginLeft = (b.level * 1.2) + "rem";
-    docEl.appendChild(el);
-    openList = { el, ordered, level: b.level || 0 };
+  const level = b.level || 0;
+  while (listStack.length) {
+    const top = listStack[listStack.length - 1];
+    if (top.level > level || (top.level === level && top.ordered !== ordered)) {
+      listStack.pop();
+    } else {
+      break;
+    }
   }
-  return openList.el;
+  const top = listStack[listStack.length - 1];
+  if (top && top.level === level) return top.el;
+
+  const el = document.createElement(ordered ? "ol" : "ul");
+  if (ordered && b.n > 1) el.setAttribute("start", b.n);
+  // nest under the last item of the enclosing list, if any
+  const parent = top ? (top.el.lastElementChild || top.el) : docEl;
+  parent.appendChild(el);
+  listStack.push({ el, ordered, level });
+  return el;
 }
 
 for (const b of blocks) {
-  if (b.kind !== "list_item") openList = null;
+  if (b.kind !== "list_item") listStack = [];
 
   if (b.kind === "code") {
     const pre = document.createElement("pre");
