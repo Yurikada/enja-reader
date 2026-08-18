@@ -8,9 +8,52 @@
     return;
   }
 
-  const api = { deactivate: () => { alive = false; } };
+  // session state — declared before deactivate so the FULL deactivate path
+  // is available even while init below is still awaiting
+  let alive = true;
+  let restore = [];   // [element, original nodes, created nodes]
+  let spans = [];
+  let queue = [];
+  let running = 0;
+  let host = null, slider = null, pct = null, tip = null;
+  const CONCURRENCY = 3;
+  const manual = new Map();
+
+  function teardown() {
+    queue = [];
+    manual.clear();
+    for (const [el, originals, created] of restore) {
+      const present = created.filter((n) => n.parentNode === el);
+      if (!present.length) continue;
+      const marker = document.createTextNode("");
+      el.insertBefore(marker, present[0]);
+      for (const n of present) n.remove();
+      for (const o of originals) el.insertBefore(o, marker);
+      marker.remove();
+    }
+    restore = [];
+    spans = [];
+    host?.remove();
+    host = null;
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("mouseover", onOver, true);
+    document.removeEventListener("mouseout", onOut, true);
+  }
+
+  const api = {
+    deactivate() {
+      if (!alive) return;
+      alive = false;
+      teardown();
+      try {
+        chrome.runtime.sendMessage({ type: "enja-remove-css" });
+      } catch {
+        /* extension context may be gone (e.g. harness) */
+      }
+      delete window.__enjaReader;
+    },
+  };
   window.__enjaReader = api;
-  let alive = true; // the whole session (until deactivate)
 
   const settings = Object.assign(
     { backend: "auto", select: "hash", ratio: 30, model: "gemma2", direction: "auto" },
@@ -135,49 +178,9 @@
     return (h >>> 0) / 2 ** 32;
   }
 
-  // ---------- session state (rebuilt on direction flip) ----------
+  // ---------- per-direction state (rebuilt on direction flip) ----------
 
   let direction, src, tgt, backend, segmenter;
-  let restore = [];   // [element, original nodes, created nodes]
-  let spans = [];
-  let queue = [];
-  let running = 0;
-  let host = null, slider = null, pct = null, tip = null;
-  const CONCURRENCY = 3;
-  const manual = new Map();
-
-  function teardown() {
-    queue = [];
-    manual.clear();
-    for (const [el, originals, created] of restore) {
-      const present = created.filter((n) => n.parentNode === el);
-      if (!present.length) continue;
-      const marker = document.createTextNode("");
-      el.insertBefore(marker, present[0]);
-      for (const n of present) n.remove();
-      for (const o of originals) el.insertBefore(o, marker);
-      marker.remove();
-    }
-    restore = [];
-    spans = [];
-    host?.remove();
-    host = null;
-    document.removeEventListener("click", onClick, true);
-    document.removeEventListener("mouseover", onOver, true);
-    document.removeEventListener("mouseout", onOut, true);
-  }
-
-  api.deactivate = () => {
-    if (!alive) return;
-    alive = false;
-    teardown();
-    try {
-      chrome.runtime.sendMessage({ type: "enja-remove-css" });
-    } catch {
-      /* extension context may be gone (e.g. harness) */
-    }
-    delete window.__enjaReader;
-  };
 
   // ---------- build ----------
 
@@ -296,8 +299,10 @@
           rec.pending = false;
           rec.span.classList.remove("enja-pending");
           running--;
-          if (!alive || !spans.includes(rec)) return;
-          render(rec);
+          if (!alive) return;
+          // a completion from a previous direction still frees a slot:
+          // always pump the CURRENT queue, render only current records
+          if (spans.includes(rec)) render(rec);
           pump();
         });
     }

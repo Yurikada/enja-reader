@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "enja-reader",
-  "version": "1.0.0",
-  "description": "英語ページを文単位で英日混成表示。ノブで日本語比率を調整し、一文単位で英語を英語のまま読む練習をする。",
+  "version": "1.1.0",
+  "description": "ページを文単位でバイリンガル混成表示。英語ページは日本語比率、日本語ページは英語比率をノブで調整し、一文単位で外国語のまま読む練習をする。",
   "action": {
     "default_title": "enja-reader",
     "default_popup": "popup.html"
