@@ -118,11 +118,16 @@ between reading Japanese and reading English.</p></blockquote>
   slider2.value = 100;
   slider2.dispatchEvent(new Event("input")); // fill queue with untranslated records
   await sleep(30); // let ~CONCURRENCY jobs start
+  // simulate an SPA replacing a processed block's content while active
+  const h2 = document.querySelector("h2");
+  h2.replaceChildren(document.createTextNode("REPLACED BY SPA"));
   bar().shadowRoot.querySelector(".close").click();
   const callsAtClose = window.__mockCalls;
   await sleep(1000);
   ok("strictly no calls after close", window.__mockCalls === callsAtClose);
   ok("close deactivated", !bar() && document.querySelectorAll(".enja-s").length === 0);
+  ok("SPA-replaced block not resurrected", h2.textContent === "REPLACED BY SPA");
+  h2.replaceChildren(document.createTextNode("The core hypothesis"));
 
   // 6. third injection re-activates again (toggle still works)
   await inject();

@@ -21,9 +21,17 @@
     active = false;
     queue.length = 0;
     for (const [el, originals, created] of restore) {
-      // remove only what we created; nodes the page added while active stay
-      for (const n of created) n.remove();
-      el.prepend(...originals);
+      // restore only when our nodes are still in place; if the page replaced
+      // the block's content while active, don't resurrect the old content
+      const present = created.filter((n) => n.parentNode === el);
+      if (!present.length) continue;
+      // put originals exactly where our content sat, keeping any nodes the
+      // page added around it in order
+      const marker = document.createTextNode("");
+      el.insertBefore(marker, present[0]);
+      for (const n of present) n.remove();
+      for (const o of originals) el.insertBefore(o, marker);
+      marker.remove();
     }
     host?.remove();
     document.removeEventListener("click", onClick, true);
