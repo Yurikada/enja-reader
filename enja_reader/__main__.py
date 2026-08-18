@@ -66,7 +66,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         for i, sent in enumerate(b.sentences):
             before = b.sentences[i - 1] if i > 0 else ""
             after = b.sentences[i + 1] if i + 1 < len(b.sentences) else ""
-            ja = translate_sentence(args.model, sent, before, after, cache)
+            ja = translate_sentence(args.model, sent, before, after, cache, kind=b.kind)
             pairs.append({"en": sent, "ja": ja, "h": round(thresholds[done], 6)})
             done += 1
             if done % 10 == 0 or done == total:

@@ -13,11 +13,21 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 
 SYSTEM_PROMPT = (
     "You are a professional English-to-Japanese translator. "
-    "Translate the sentence given by the user into natural, fluent Japanese. "
+    "Translate the target sentence into natural, fluent Japanese. "
     "Use the surrounding context only to resolve pronouns and terminology. "
-    "Write in plain form (だ・である調), consistently across sentences. "
-    "Output ONLY the Japanese translation of the target sentence — "
-    "no explanations, no romaji, no quotation marks around the output."
+    "Strictly write in plain form (だ・である調). Never use です・ます form. "
+    "Output ONLY the Japanese translation — no explanations, no romaji, "
+    "no quotation marks around the output.\n\n"
+    "Examples of the required style:\n"
+    "The system is fast. → このシステムは速い。\n"
+    "This is how training wheels work. → これが補助輪の仕組みである。\n"
+    "It must be a knob, not a constant. → それは定数ではなくノブでなければならない。\n"
+    "You can adjust the ratio at any time. → 比率はいつでも調整できる。"
+)
+
+HEADING_HINT = (
+    "The target is a section heading: translate it as a concise noun phrase "
+    "(体言止め), with no trailing particle and no final period."
 )
 
 
@@ -77,13 +87,18 @@ def translate_sentence(
     context_before: str = "",
     context_after: str = "",
     cache: TranslationCache | None = None,
+    kind: str = "",
 ) -> str:
+    # the hint changes the expected output, so it participates in the cache key
+    hint = HEADING_HINT if kind == "heading" else ""
     if cache:
-        hit = cache.get(model, sentence, context_before, context_after)
+        hit = cache.get(model, sentence, context_before, context_after + hint)
         if hit is not None:
             return hit
 
     parts = []
+    if hint:
+        parts.append(hint)
     if context_before:
         parts.append(f"Context (before): {context_before}")
     if context_after:
@@ -92,7 +107,7 @@ def translate_sentence(
     ja = _strip_wrapping_quotes(_chat(model, "\n".join(parts)))
 
     if cache:
-        cache.put(model, sentence, context_before, context_after, ja)
+        cache.put(model, sentence, context_before, context_after + hint, ja)
     return ja
 
 
