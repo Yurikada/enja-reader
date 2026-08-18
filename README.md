@@ -15,20 +15,30 @@
 
 ```
 ollama serve   # 起動していなければ
-python -m enja_reader build samples/attention.md -o out/attention.html --model gemma2 --ratio 30
+python -m enja_reader build samples/attention.md -o out/attention.html --model gemma2 --ratio 30 --select difficulty
 ```
 
 - `--model`: Ollamaモデル名 (既定 `gemma2`)
 - `--ratio`: 初期日本語比率 0-100 (既定 30)
+- `--select`: どの文から日本語化するか。`hash`=安定ランダム(既定) / `difficulty`=難しい文から
 - `--cache`: 翻訳キャッシュのパス (既定 `.cache/translations.sqlite`)
 
-対応入力: Markdown / プレーンテキスト。コードブロックは翻訳対象外。
+対応入力: Markdown / プレーンテキスト / HTML (`.html`/`.htm` は自動判別)。コードブロックは翻訳対象外。
+
+## テスト
+
+```
+python tests/test_core.py
+```
+
+Ollama不要のオフラインテスト(パーサ・文選択・引用符処理)。
 
 ## ロードマップ
 
-1. **v0.1 (今ここ)**: ローカルMarkdown → 自己完結HTMLビューア
-2. v0.2: HTML/PDF入力、難易度ベースの文選択(難しい文から日本語化)、訳質向上(用語集・文脈幅)
-3. v1.0: Chrome拡張 — content scriptでページ本文を文分割し、localhostのOllamaへ翻訳リクエスト(`OLLAMA_ORIGINS`でCORS許可)。ビューアのデータモデルをそのまま移植
+1. ~~v0.1: ローカルMarkdown → 自己完結HTMLビューア~~
+2. **v0.2 (今ここ)**: HTML入力、難易度ベースの文選択、ビューアJS/CSSの分離(拡張移植準備)
+3. v0.3: 訳質向上(モデル比較・用語集・文体一貫性)、PDF入力
+4. v1.0: Chrome拡張 — content scriptでページ本文を文分割し、localhostのOllamaへ翻訳リクエスト(`OLLAMA_ORIGINS`でCORS許可)。`enja_reader/assets/viewer.js` のロジックをそのまま移植
 
 ## 依存
 

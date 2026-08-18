@@ -1,0 +1,46 @@
+:root {
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #667085;
+  --ja-bg: #f0f6ff; --manual-outline: #f4b400;
+  --accent: #2563eb; --code-bg: #f6f8fa; --border: #e4e7ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418; --fg: #e6e6e6; --muted: #98a2b3;
+    --ja-bg: #16243a; --accent: #60a5fa;
+    --code-bg: #1b1f24; --border: #2a2f36;
+  }
+}
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  line-height: 1.85;
+}
+main { max-width: 46rem; margin: 0 auto; padding: 5.5rem 1.5rem 4rem; }
+#bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+  padding: .6rem 1.2rem; background: var(--bg);
+  border-bottom: 1px solid var(--border); font-size: .85rem;
+}
+#bar label { color: var(--muted); white-space: nowrap; }
+#ratio { width: min(16rem, 40vw); accent-color: var(--accent); }
+#pct { min-width: 7em; font-variant-numeric: tabular-nums; }
+#reset { border: 1px solid var(--border); background: none; color: var(--muted);
+         border-radius: 6px; padding: .15rem .6rem; cursor: pointer; }
+#reset:hover { color: var(--fg); }
+.s { cursor: pointer; border-radius: 3px; padding: 0 1px; }
+.s.ja { background: var(--ja-bg); }
+.s.manual { box-shadow: 0 0 0 1px var(--manual-outline); }
+.s:hover { outline: 2px solid var(--accent); outline-offset: 1px; }
+pre { background: var(--code-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: .9rem 1rem; overflow-x: auto;
+      font-size: .85rem; line-height: 1.5; }
+blockquote { border-left: 3px solid var(--border); margin: 0 0 0 .2rem;
+             padding-left: 1rem; color: var(--muted); }
+h1,h2,h3,h4,h5,h6 { line-height: 1.4; }
+ul, ol { padding-left: 1.6rem; }
+#tip {
+  position: fixed; z-index: 20; max-width: 30rem; display: none;
+  background: var(--fg); color: var(--bg); font-size: .82rem; line-height: 1.6;
+  padding: .5rem .7rem; border-radius: 8px; pointer-events: none;
+}

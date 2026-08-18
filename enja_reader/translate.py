@@ -31,21 +31,22 @@ class TranslationCache:
         )
 
     @staticmethod
-    def key(model: str, sentence: str) -> str:
+    def key(model: str, sentence: str, before: str, after: str) -> str:
         return hashlib.sha256(
-            f"{model}\x00{SYSTEM_PROMPT}\x00{sentence}".encode()
+            f"{model}\x00{SYSTEM_PROMPT}\x00{before}\x00{after}\x00{sentence}".encode()
         ).hexdigest()
 
-    def get(self, model: str, sentence: str) -> str | None:
+    def get(self, model: str, sentence: str, before: str, after: str) -> str | None:
         row = self.conn.execute(
-            "SELECT ja FROM translations WHERE key=?", (self.key(model, sentence),)
+            "SELECT ja FROM translations WHERE key=?",
+            (self.key(model, sentence, before, after),),
         ).fetchone()
         return row[0] if row else None
 
-    def put(self, model: str, sentence: str, ja: str) -> None:
+    def put(self, model: str, sentence: str, before: str, after: str, ja: str) -> None:
         self.conn.execute(
             "INSERT OR REPLACE INTO translations VALUES (?,?,?,?)",
-            (self.key(model, sentence), model, sentence, ja),
+            (self.key(model, sentence, before, after), model, sentence, ja),
         )
         self.conn.commit()
 
@@ -78,7 +79,7 @@ def translate_sentence(
     cache: TranslationCache | None = None,
 ) -> str:
     if cache:
-        hit = cache.get(model, sentence)
+        hit = cache.get(model, sentence, context_before, context_after)
         if hit is not None:
             return hit
 
@@ -88,13 +89,33 @@ def translate_sentence(
     if context_after:
         parts.append(f"Context (after): {context_after}")
     parts.append(f"Target sentence: {sentence}")
-    ja = _chat(model, "\n".join(parts))
-    # models occasionally wrap output in quotes despite instructions
-    ja = ja.strip().strip('"「」').strip()
+    ja = _strip_wrapping_quotes(_chat(model, "\n".join(parts)))
 
     if cache:
-        cache.put(model, sentence, ja)
+        cache.put(model, sentence, context_before, context_after, ja)
     return ja
+
+
+_QUOTE_PAIRS = [('"', '"'), ("「", "」"), ("『", "』"), ("“", "”")]
+
+
+def _strip_wrapping_quotes(text: str) -> str:
+    """Remove quotes only when they wrap the whole output as a matched pair."""
+    text = text.strip()
+    changed = True
+    while changed and len(text) >= 2:
+        changed = False
+        for opening, closing in _QUOTE_PAIRS:
+            if text.startswith(opening) and text.endswith(closing):
+                inner = text[len(opening):-len(closing)]
+                # keep quotes that belong to the sentence itself,
+                # e.g. 「こんにちは」と彼は言った。
+                if closing in inner:
+                    continue
+                text = inner.strip()
+                changed = True
+                break
+    return text
 
 
 def check_server(model: str) -> str | None:
