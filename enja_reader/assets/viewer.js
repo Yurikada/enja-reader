@@ -37,7 +37,7 @@ function listContainerFor(b) {
   if (top && top.level === level) return top.el;
 
   const el = document.createElement(ordered ? "ol" : "ul");
-  if (ordered && b.n > 1) el.setAttribute("start", b.n);
+  if (ordered && Number.isInteger(b.n) && b.n >= 0 && b.n !== 1) el.setAttribute("start", b.n);
   // nest under the last item of the enclosing list, if any
   const parent = top ? (top.el.lastElementChild || top.el) : docEl;
   parent.appendChild(el);

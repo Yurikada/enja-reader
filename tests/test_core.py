@@ -23,15 +23,28 @@ def test_ordered_list():
     md = "1. first item\n2. second item\n- bullet"
     blocks = parse_markdown(md)
     assert [b.ordered for b in blocks] == [True, True, False]
-    assert [b.number for b in blocks] == [1, 2, 0]
+    assert [b.number for b in blocks] == [1, 2, -1]
     assert all(b.kind == "list_item" for b in blocks)
+    # "0. item" keeps its zero start
+    assert parse_markdown("0. zero item")[0].number == 0
 
 
 def test_nested_list_levels():
     md = "1. parent one\n  - child bullet\n2. parent two\n3. parent three"
     blocks = parse_markdown(md)
     assert [(b.level, b.ordered, b.number) for b in blocks] == [
-        (0, True, 1), (1, False, 0), (0, True, 2), (0, True, 3)]
+        (0, True, 1), (1, False, -1), (0, True, 2), (0, True, 3)]
+
+
+def test_html_list_item_with_block_children():
+    blocks = parse_html(
+        '<body><ol start="3"><li><p>First para item.</p></li>'
+        "<li><div>Second div item.</div></li></ol></body>"
+    )
+    items = [b for b in blocks if b.kind == "list_item"]
+    assert [b.text for b in items] == ["First para item.", "Second div item."]
+    assert [b.number for b in items] == [3, 4]
+    assert not any(b.kind == "paragraph" for b in blocks)
 
 
 def test_html_parse():
