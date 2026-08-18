@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #fcfcfd; --fg: #1c1f24; --muted: #667085;
+    --border: #e4e7ec; --accent: #4b8bf5; --accent-fg: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1f24; --fg: #e8eaed; --muted: #9aa4b2;
+      --border: #333a43; --accent: #4b8bf5;
+    }
+  }
+  body {
+    width: 280px; margin: 0; padding: 14px 16px 16px;
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.6 "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  }
+  h1 { font-size: 14px; margin: 0 0 10px; letter-spacing: .02em; }
+  h1 small { color: var(--muted); font-weight: normal; margin-left: 6px; }
+  #toggle {
+    width: 100%; padding: 9px 0; border: none; border-radius: 10px;
+    background: var(--accent); color: var(--accent-fg);
+    font-size: 13.5px; font-family: inherit; cursor: pointer; margin-bottom: 14px;
+  }
+  #toggle.active { background: #d9534f; }
+  #toggle:disabled { opacity: .5; cursor: default; }
+  .field { display: flex; align-items: center; justify-content: space-between;
+           gap: 10px; margin-bottom: 9px; }
+  .field label { color: var(--muted); white-space: nowrap; }
+  select, input[type=text] {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 7px; padding: 3px 7px; font-family: inherit; font-size: 12.5px;
+    max-width: 150px;
+  }
+  input[type=range] { width: 110px; accent-color: var(--accent); }
+  #ratioVal { min-width: 3em; text-align: right; color: var(--muted);
+              font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 11px; margin-top: 10px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<h1>enja-reader<small>文単位バイリンガル表示</small></h1>
+<button id="toggle" disabled>読み込み中…</button>
+<div class="field">
+  <label for="direction">翻訳方向</label>
+  <select id="direction">
+    <option value="auto">自動判定</option>
+    <option value="en-ja">英語 → 日本語</option>
+    <option value="ja-en">日本語 → 英語</option>
+  </select>
+</div>
+<div class="field">
+  <label for="select">文の選び方</label>
+  <select id="select">
+    <option value="hash">安定ランダム</option>
+    <option value="difficulty">難易度順</option>
+  </select>
+</div>
+<div class="field">
+  <label for="ratio">初期比率</label>
+  <span>
+    <input type="range" id="ratio" min="0" max="100" step="5">
+    <span id="ratioVal"></span>
+  </span>
+</div>
+<div class="field">
+  <label for="backend">翻訳エンジン</label>
+  <select id="backend">
+    <option value="auto">自動 (内蔵優先)</option>
+    <option value="chrome">Chrome内蔵</option>
+    <option value="ollama">Ollama</option>
+  </select>
+</div>
+<div class="field" id="modelField">
+  <label for="model">Ollamaモデル</label>
+  <input type="text" id="model" spellcheck="false">
+</div>
+<p class="note">設定の変更は次回の有効化から反映。ページ内バーでも方向切替・比率調整ができます。</p>
+<script src="popup.js"></script>
+</body>
+</html>

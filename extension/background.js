@@ -1,10 +1,10 @@
-// Service worker: injects the content script on action click and proxies
-// Ollama requests (content scripts are subject to page CORS; the worker
-// is not, thanks to host_permissions).
+// Service worker: proxies Ollama requests (content scripts are subject to
+// page CORS; the worker is not, thanks to host_permissions) and removes the
+// injected CSS on deactivate. Injection itself is driven by the popup.
 
 const OLLAMA_URL = "http://localhost:11434/api/chat";
 
-const SYSTEM_PROMPT = [
+const PROMPT_EN_JA = [
   "You are a professional English-to-Japanese translator. ",
   "Translate the target sentence into natural, fluent Japanese. ",
   "Use the surrounding context only to resolve pronouns and terminology. ",
@@ -18,11 +18,22 @@ const SYSTEM_PROMPT = [
   "You can adjust the ratio at any time. → 比率はいつでも調整できる。",
 ].join("");
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id || !/^https?:/.test(tab.url || "")) return;
-  await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["content.css"] });
-  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
-});
+const PROMPT_JA_EN = [
+  "You are a professional Japanese-to-English translator. ",
+  "Translate the target sentence into natural, idiomatic English. ",
+  "Use the surrounding context only to resolve subjects and terminology. ",
+  "Output ONLY the English translation — no explanations, ",
+  "no quotation marks around the output.\n\n",
+  "Examples:\n",
+  "このシステムは速い。 → This system is fast.\n",
+  "比率はいつでも調整できる。 → You can adjust the ratio at any time.",
+].join("");
+
+// NOTE: MV3 service workers cap a single fetch response wait (~30s); a cold
+// Ollama model can exceed it. Abort below that cap so the error reliably
+// reaches the caller instead of the message channel being lost. A timed-out
+// sentence stays untranslated; re-activating retries it once the model is warm.
+const OLLAMA_TIMEOUT_MS = 25_000;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === "enja-remove-css" && sender.tab?.id) {
@@ -39,13 +50,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true; // keep the channel open for the async response
 });
 
-// NOTE: MV3 service workers cap a single fetch response wait (~30s); a cold
-// Ollama model can exceed it. Abort below that cap so the error reliably
-// reaches the caller instead of the message channel being lost. A timed-out
-// sentence stays English; re-activating retries it once the model is warm.
-const OLLAMA_TIMEOUT_MS = 25_000;
-
-async function ollamaTranslate({ sentence, before, after, model }) {
+async function ollamaTranslate({ sentence, before, after, model, direction }) {
   const parts = [];
   if (before) parts.push(`Context (before): ${before}`);
   if (after) parts.push(`Context (after): ${after}`);
@@ -59,19 +64,19 @@ async function ollamaTranslate({ sentence, before, after, model }) {
       stream: false,
       options: { temperature: 0.2 },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: direction === "ja-en" ? PROMPT_JA_EN : PROMPT_EN_JA },
         { role: "user", content: parts.join("\n") },
       ],
     }),
   });
   if (!resp.ok) throw new Error(`Ollama HTTP ${resp.status}`);
   const data = await resp.json();
-  let ja = (data.message?.content || "").trim();
+  let out = (data.message?.content || "").trim();
   // strip quotes only when they wrap the whole output as a matched pair
   for (const [open, close] of [['"', '"'], ["「", "」"], ["『", "』"], ["“", "”"]]) {
-    if (ja.startsWith(open) && ja.endsWith(close) && !ja.slice(open.length, -close.length).includes(close)) {
-      ja = ja.slice(open.length, -close.length).trim();
+    if (out.startsWith(open) && out.endsWith(close) && !out.slice(open.length, -close.length).includes(close)) {
+      out = out.slice(open.length, -close.length).trim();
     }
   }
-  return ja;
+  return out;
 }

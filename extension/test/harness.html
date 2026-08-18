@@ -20,11 +20,11 @@
   };
   self.Translator = {
     availability: async () => "available",
-    create: async () => ({
+    create: async ({ targetLanguage }) => ({
       translate: async (s) => {
         window.__mockCalls++;
         await new Promise((r) => setTimeout(r, 40));
-        return "【訳】" + s;
+        return (targetLanguage === "en" ? "[EN] " : "【訳】") + s;
       },
     }),
   };
@@ -88,6 +88,23 @@ between reading Japanese and reading English.</p></blockquote>
   await sleep(200);
   ok("click toggles lang", !first.classList.contains("enja-ja"));
   ok("manual mark set", first.classList.contains("enja-manual"));
+
+  // 3b. direction flip: rebuilds as ja->en, JA paragraph becomes the target
+  const knobLabel = () => bar().shadowRoot.querySelector(".knob-label").textContent;
+  bar().shadowRoot.querySelector(".dir").click();
+  await sleep(700);
+  ok("flip: knob label becomes 英語比率", knobLabel() === "英語比率");
+  ok("flip: ja paragraph wrapped", [...document.querySelectorAll(".enja-s")]
+      .some((s) => s.textContent.includes("ラテン文字")));
+  const sliderJa = bar().shadowRoot.querySelector("input");
+  sliderJa.value = 100;
+  sliderJa.dispatchEvent(new Event("input"));
+  await sleep(900);
+  ok("flip: EN translation shown", [...document.querySelectorAll(".enja-s")]
+      .some((s) => s.textContent.startsWith("[EN] ")));
+  bar().shadowRoot.querySelector(".dir").click();
+  await sleep(700);
+  ok("flip back: knob label 日本語比率", knobLabel() === "日本語比率");
 
   // 4. deactivate: DOM restored with the SAME node objects; nodes the page
   //    added while active must survive

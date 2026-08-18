@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "英語ページを文単位で英日混成表示。ノブで日本語比率を調整し、一文単位で英語を英語のまま読む練習をする。",
   "action": {
-    "default_title": "enja-reader: このページを混成表示 (再クリックで解除)"
+    "default_title": "enja-reader",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"

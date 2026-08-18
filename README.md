@@ -52,16 +52,20 @@ few-shot例(特に「X, not Y」構文)の追加で両モデルとも否定構�
 
 ## Chrome拡張 (`extension/`)
 
-任意の英語ページを、その場で文単位の英日混成表示にする。
+任意のページを、その場で文単位のバイリンガル混成表示にする。**双方向対応**: 英語ページは「日本語比率」ノブで英→日、日本語ページは「英語比率」ノブで日→英(方向は自動判定、バーのピルで切替可能)。
 
-**導入**: `chrome://extensions` → デベロッパーモードON → 「パッケージ化されていない拡張機能を読み込む」で `extension/` を選択。ツールバーのアイコンをクリックで有効化、再クリックで解除(元のページに完全復元)。
+**導入**: `chrome://extensions` → デベロッパーモードON → 「パッケージ化されていない拡張機能を読み込む」で `extension/` を選択。アイコンクリックでポップアップが開き、「このページで有効化」で開始、「解除して元に戻す」で完全復元。
+
+**ポップアップ設定** (`chrome.storage.sync` に保存、次回有効化から反映):
+
+- 翻訳方向: 自動判定 / 英→日 / 日→英
+- 文の選び方: 安定ランダム / 難易度順 (英→日は難文から日本語化、日→英は易文から英語化)
+- 初期比率、翻訳エンジン、Ollamaモデル名
 
 **翻訳バックエンド** (自動選択):
 
 1. **Chrome内蔵 Translator API** (既定、Chrome 138+) — オンデバイス翻訳。セットアップ不要・ほぼ瞬時。初回のみ言語パックが自動DLされる
-2. **Ollama** (品質モード) — だ・である統一のLLM翻訳。`OLLAMA_ORIGINS=chrome-extension://*` を環境変数に設定して `ollama serve` を起動しておく
-
-`chrome.storage.sync` の `backend` (`auto`/`chrome`/`ollama`)、`select` (`hash`/`difficulty`)、`ratio`、`model` で挙動を変更できる(設定UIは今後)。
+2. **Ollama** (品質モード) — 英→日はだ・である統一、日→英は自然な英語のLLM翻訳。`OLLAMA_ORIGINS=chrome-extension://*` を環境変数に設定して `ollama serve` を起動しておく
 
 **ロジック検証**: `extension/test/harness.html` をHTTPサーバ経由で開くと、モックTranslatorでcontent scriptの全動作(抽出・分割・混成・トグル・復元)を確認できる。
 
